@@ -1,0 +1,18 @@
+{
+  "name": "qr-image-platform-demo",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Démo statique de QR Image Platform : traitement de l'image et génération du QR code dans le navigateur.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "qrcode-generator": "1.4.4"
+  },
+  "devDependencies": {
+    "vite": "5.4.11"
+  }
+}

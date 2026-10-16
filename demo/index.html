@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <title>QR Image Platform · Partagez une image avec un QR code</title>
+  <meta name="description" content="Déposez une image et obtenez instantanément un QR code qui l'ouvre sur n'importe quel téléphone.">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#141b34">
+  <link rel="icon" type="image/png" href="../static/brand/favicon.png">
+  <link rel="apple-touch-icon" href="../static/brand/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+  <link rel="stylesheet" href="../static/css/app.css">
+  <script>
+    (function () {
+      var t = null;
+      try { t = localStorage.getItem('theme'); } catch (e) {}
+      if (t !== 'dark' && t !== 'light') {
+        t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+      }
+      document.documentElement.dataset.theme = t;
+    })();
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#envoi">Aller à l'envoi d'image</a>
+  <div class="hero">
+  <header class="topbar">
+    <div class="wrap">
+      <a class="brand" href="/" aria-label="QR Image Platform, accueil">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">QR Image <span>Platform</span></span>
+      </a>
+      <button class="theme-toggle" id="themeToggle" type="button" aria-label="Activer le thème sombre" aria-pressed="false">
+        <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+        <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+    </div>
+  </header>
+    <main class="wrap hero-grid" id="main">
+      <div class="hero-copy">
+        <span class="eyebrow">Partage d'images par QR code</span>
+        <h1>Transformez une image en <em>QR code</em> partageable.</h1>
+        <p class="lead">Déposez une photo, obtenez aussitôt un QR code qui l'ouvre sur n'importe quel téléphone. Sans compte, sans application à installer.</p>
+        <ul class="facts" aria-label="Conditions d'utilisation">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="1.6"/><path d="m21 15-5-5L5 21"/></svg>PNG, JPG, GIF, BMP, WebP</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>10 Mo maximum</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Conservée 7 jours</li>
+        </ul>
+      </div>
+
+      <section class="upload-card" id="envoi" aria-labelledby="uploadTitle">
+        <h2 class="sr-only" id="uploadTitle">Envoyer une image</h2>
+        <div id="pickerArea">
+          <input type="file" id="imageFile" class="sr-only" accept="image/png,image/jpeg,image/gif,image/bmp,image/webp" aria-describedby="dzHint">
+          <label class="dropzone" id="uploadZone" for="imageFile">
+            <span class="dz-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+            </span>
+            <span class="dz-title">Glissez-déposez votre image ici</span>
+            <span class="dz-sub">ou <u>parcourez vos fichiers</u></span>
+            <span class="dz-hint" id="dzHint">Formats PNG, JPG, GIF, BMP ou WebP · 10 Mo maximum</span>
+          </label>
+
+          <div class="preview" id="preview" hidden>
+            <img id="previewImg" alt="">
+            <div class="preview-body">
+              <div class="preview-name" id="previewName"></div>
+              <div class="preview-meta" id="previewMeta"></div>
+              <div class="progress-track" id="progressTrack" role="progressbar" aria-label="Progression de l'envoi" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                <div class="progress-bar" id="progressBar"></div>
+              </div>
+              <div class="status-text" id="statusText" aria-live="polite"></div>
+            </div>
+          </div>
+
+          <p class="demo-sample"><button class="btn btn-text" id="sampleBtn" type="button">Pas d'image sous la main ? Essayer avec une image d'exemple</button></p>
+
+          <div class="error" id="errorMsg" role="alert" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>
+            <span id="errorText"></span>
+          </div>
+        </div>
+
+        <div class="result" id="result" hidden>
+          <div class="qr-frame">
+            <img id="qrPreview" alt="QR code généré" width="170" height="170">
+          </div>
+          <div class="result-head">
+            <span class="result-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Prêt à partager</span>
+            <h2 id="resultTitle" tabindex="-1">Votre QR code est prêt</h2>
+            <p class="note">Scannez-le ou partagez le lien : l'image s'ouvre sur n'importe quel appareil.</p>
+          </div>
+          <div class="link-field">
+            <label class="sr-only" for="shareUrl">Lien de partage</label>
+            <input id="shareUrl" type="text" readonly value="">
+            <button class="btn btn-ghost btn-sm" id="copyLinkBtn" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>
+              <span class="label">Copier le lien</span>
+            </button>
+          </div>
+          <div class="actions">
+            <a id="viewLink" class="btn btn-primary" href="#" target="_blank" rel="noopener">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+              Voir l'image
+            </a>
+            <a id="downloadQrLink" class="btn btn-ghost" href="#" download="qr_code.png">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+              Télécharger le QR
+            </a>
+          </div>
+          <div class="result-foot">
+            <button class="btn btn-text" id="resetBtn" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              Envoyer une autre image
+            </button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <section class="section" aria-labelledby="howTitle">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="kicker">Comment ça marche</span>
+        <h2 id="howTitle">Trois étapes, quelques secondes.</h2>
+        <p>Aucune inscription : l'image est optimisée, stockée sous un identifiant aléatoire et reliée à son propre QR code.</p>
+      </div>
+      <ol class="steps">
+        <li class="step">
+          <span class="step-num" aria-hidden="true">01</span>
+          <span class="step-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg></span>
+          <h3>Déposez votre image</h3>
+          <p>Glissez une photo dans la zone d'envoi ou choisissez-la depuis votre appareil.</p>
+        </li>
+        <li class="step">
+          <span class="step-num" aria-hidden="true">02</span>
+          <span class="step-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></svg></span>
+          <h3>Le QR code est généré</h3>
+          <p>L'image est optimisée pour le web et un QR code unique pointe vers sa page de partage.</p>
+        </li>
+        <li class="step">
+          <span class="step-num" aria-hidden="true">03</span>
+          <span class="step-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/><path d="M9 7h2v2H9zM13 11h2v2h-2z"/></svg></span>
+          <h3>Partagez ou imprimez</h3>
+          <p>Téléchargez le QR, copiez le lien : il suffit de scanner pour voir l'image.</p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="whyTitle">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="kicker">Avantages</span>
+        <h2 id="whyTitle">Pensé pour partager simplement.</h2>
+      </div>
+      <div class="features">
+        <article class="feature">
+          <span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/></svg></span>
+          <h3>Accessible partout</h3>
+          <p>Le lien s'ouvre dans n'importe quel navigateur, où que vous soyez.</p>
+        </article>
+        <article class="feature">
+          <span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg></span>
+          <h3>Mobile-friendly</h3>
+          <p>Des pages conçues pour l'écran du téléphone qui scanne le code.</p>
+        </article>
+        <article class="feature">
+          <span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6z"/><path d="m9 12 2 2 4-4"/></svg></span>
+          <h3>Sécurisé</h3>
+          <p>Identifiants aléatoires impossibles à deviner, fichiers nettoyés après 7 jours.</p>
+        </article>
+        <article class="feature">
+          <span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></span>
+          <h3>Ultra-rapide</h3>
+          <p>Images compressées automatiquement pour un affichage immédiat.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="wrap">
+      <span>QR Image Platform</span>
+      <span>Images conservées 7 jours · 10 Mo maximum</span>
+    </div>
+  </footer>
+
+  <div class="toast" id="toast" role="status" aria-live="polite">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+    <span></span>
+  </div>
+  <script type="module" src="./src/index.js"></script>
+</body>
+</html>

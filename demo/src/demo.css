@@ -1,0 +1,13 @@
+/* Ajouts propres à la démo statique (le reste vient de static/css/app.css) */
+#__demo-badge {
+  position: fixed; left: 10px; bottom: 10px; z-index: 2147483000; pointer-events: none;
+  font: 500 11px/1.2 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  letter-spacing: .02em; color: #f4f4f5; background: rgba(39, 39, 42, .78);
+  padding: 5px 9px; border-radius: 999px; box-shadow: 0 1px 4px rgba(0, 0, 0, .18); opacity: .85;
+}
+.demo-sample { margin: 12px 0 0; text-align: center; }
+.demo-sample .btn { font-size: .86rem; white-space: normal; }
+.notfound { display: block; text-align: center; padding: 48px 24px; }
+.notfound h1 { margin: 0 0 10px; }
+.notfound p { max-width: 52ch; margin: 0 auto 10px; }
+.notfound .btn { margin-top: 14px; }

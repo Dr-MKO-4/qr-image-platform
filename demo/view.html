@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <title>Image partagée · QR Image Platform</title>
+  <meta name="description" content="Image partagée via QR Image Platform.">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#141b34">
+  <link rel="icon" type="image/png" href="../static/brand/favicon.png">
+  <link rel="apple-touch-icon" href="../static/brand/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+  <link rel="stylesheet" href="../static/css/app.css">
+  <script>
+    (function () {
+      var t = null;
+      try { t = localStorage.getItem('theme'); } catch (e) {}
+      if (t !== 'dark' && t !== 'light') {
+        t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+      }
+      document.documentElement.dataset.theme = t;
+    })();
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Aller au contenu</a>
+  <div class="view-top">
+  <header class="topbar">
+    <div class="wrap">
+      <a class="brand" href="/" aria-label="QR Image Platform, accueil">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">QR Image <span>Platform</span></span>
+      </a>
+      <button class="theme-toggle" id="themeToggle" type="button" aria-label="Activer le thème sombre" aria-pressed="false">
+        <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+        <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+    </div>
+  </header>
+  </div>
+
+  <main class="view-main" id="main">
+    <div class="wrap">
+      <article class="share-card" aria-labelledby="imgTitle">
+        <figure class="stage" style="margin:0">
+          <img id="sharedImg" alt="">
+        </figure>
+        <div class="share-side">
+          <div>
+            <span class="kicker">Image partagée</span>
+            <h1 id="imgTitle"></h1>
+            <p class="sub" id="imgSub">Partagée via QR Image Platform.</p>
+          </div>
+
+          <dl class="meta">
+            <div>
+              <dt>Ajoutée le</dt>
+              <dd id="addedAt"></dd>
+            </div>
+            <div>
+              <dt>Poids</dt>
+              <dd id="weight"></dd>
+            </div>
+            <div>
+              <dt>Dimensions</dt>
+              <dd id="dims">…</dd>
+            </div>
+            <div>
+              <dt>Format</dt>
+              <dd>JPEG optimisé</dd>
+            </div>
+          </dl>
+
+          <div class="qr-block">
+            <a class="qr-mini" id="qrBig" href="#" target="_blank" rel="noopener" aria-label="Ouvrir le QR code en grand">
+              <img id="qrImg" alt="QR code de cette page">
+            </a>
+            <div>
+              <strong>Scannez pour ouvrir sur mobile</strong>
+              <p>Ce QR code renvoie vers cette page. Lien valable 7 jours après l'envoi.</p>
+            </div>
+          </div>
+
+          <div class="share-actions">
+            <a href="#" id="dlImage" class="btn btn-primary" download>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+              Télécharger l'image
+            </a>
+            <div class="row">
+              <a href="#" id="dlQr" class="btn btn-ghost" download aria-label="Télécharger le QR code">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M14 14h3v3h-3zM17 20h4v-3"/></svg>
+                QR code
+              </a>
+              <button type="button" class="btn btn-ghost" data-copy-current>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>
+                <span class="label">Copier le lien</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <aside class="cta-band">
+        <div>
+          <strong>Vous aussi, partagez une image en un scan.</strong>
+          <p>Gratuit, sans compte, prêt en quelques secondes.</p>
+        </div>
+        <a class="btn btn-primary" href="/">Créer mon QR code</a>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap">
+      <span>Créé avec <a href="/">QR Image Platform</a></span>
+      <span>Images conservées 7 jours</span>
+    </div>
+  </footer>
+
+  <div class="toast" id="toast" role="status" aria-live="polite">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+    <span></span>
+  </div>
+  <script type="module" src="./src/view.js"></script>
+</body>
+</html>
