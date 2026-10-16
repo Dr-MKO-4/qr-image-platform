@@ -15,12 +15,14 @@ import io
 import base64
 from werkzeug.utils import secure_filename
 import hashlib
+import secrets
 import json
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10MB max
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'qr-image-platform-secret-key-2024')
+# Clé lue depuis l'environnement ; à défaut, valeur aléatoire générée au démarrage
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
 
 # Configuration pour le stockage (en production, utilisez une base de données)
 IMAGES_DIR = 'static/images'
@@ -184,774 +186,328 @@ def create_templates():
     """Crée les templates HTML"""
     os.makedirs('templates', exist_ok=True)
     
+    # En-tête commun (polices, styles, favicon, thème appliqué avant le rendu)
+    head_common = r'''  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#141b34">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='brand/favicon.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='brand/apple-touch-icon.png') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <script>
+    (function () {
+      var t = null;
+      try { t = localStorage.getItem('theme'); } catch (e) {}
+      if (t !== 'dark' && t !== 'light') {
+        t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+      }
+      document.documentElement.dataset.theme = t;
+    })();
+  </script>'''
+
+    topbar = r'''  <header class="topbar">
+    <div class="wrap">
+      <a class="brand" href="{{ url_for('index') }}" aria-label="QR Image Platform, accueil">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">QR Image <span>Platform</span></span>
+      </a>
+      <button class="theme-toggle" id="themeToggle" type="button" aria-label="Activer le thème sombre" aria-pressed="false">
+        <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+        <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+    </div>
+  </header>'''
+
+    toast = r'''  <div class="toast" id="toast" role="status" aria-live="polite">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+    <span></span>
+  </div>'''
+
     # Template principal
-    index_html = '''<!DOCTYPE html>
+    index_html = r'''<!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>QR Image Platform</title>
-  <style>
-    :root {
-      /* Light Colors */
-      --bg: #f0f2f5;
-      --surface: #fff;
-      --text: #333;
-      --primary: #5a67d8; /* Indigo 600 */
-      --primary-dark: #4c52af; /* Slightly darker primary for hover/active */
-      --accent: #ed64a6; /* Pink 400 */
-      --radius: 12px;
-      --transition: 0.3s ease;
-      --shadow-light: 0 12px 40px rgba(0,0,0,0.08);
-      --shadow-hover: 0 16px 48px rgba(0,0,0,0.12);
-    }
-    [data-theme="dark"] {
-      /* Dark Colors */
-      --bg: #1a202c; /* Gray 900 */
-      --surface: #2d3748; /* Gray 800 */
-      --text: #e2e8f0; /* Gray 200 */
-      --primary: #667eea; /* Indigo 500 */
-      --primary-dark: #556be7;
-      --accent: #f687b3; /* Pink 300 */
-      --shadow-light: 0 12px 40px rgba(0,0,0,0.2);
-      --shadow-hover: 0 16px 48px rgba(0,0,0,0.3);
-    }
-
-    /* Base Reset & Typography */
-    *, *::before, *::after {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-    html {
-      scroll-behavior: smooth;
-    }
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      transition: background var(--transition), color var(--transition);
-      -webkit-font-smoothing: antialiased; /* Smoother fonts on macOS/iOS */
-      -moz-osx-font-smoothing: grayscale;
-    }
-
-    /* Container */
-    .container {
-      width: 100%;
-      max-width: 800px;
-      background: var(--surface);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow-light);
-      overflow: hidden;
-      transition: background var(--transition), box-shadow var(--transition);
-    }
-
-    /* Header */
-    header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: var(--primary);
-      padding: 24px;
-      color: #fff;
-      position: relative;
-      z-index: 10;
-    }
-    header h1 {
-      font-size: 1.75rem;
-      font-weight: 700;
-    }
-
-    /* Theme Toggle */
-    .theme-toggle {
-      background: none;
-      border: none;
-      cursor: pointer;
-      width: 32px;
-      height: 32px;
-      padding: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 50%; /* Make it a circle */
-      transition: transform var(--transition), background-color var(--transition);
-    }
-    .theme-toggle:focus-visible { /* Modern focus outline */
-      outline: 2px solid #fff;
-      outline-offset: 2px;
-    }
-    .theme-toggle:hover {
-      transform: scale(1.1);
-      background-color: rgba(255,255,255,0.1); /* Subtle hover background */
-    }
-    .theme-toggle svg {
-      width: 100%;
-      height: 100%;
-      fill: currentColor; /* Use current text color for SVG */
-      transition: fill var(--transition);
-    }
-    /* Specific styling for sun/moon parts */
-    [data-theme="light"] .theme-toggle .moon { display: none; }
-    [data-theme="dark"] .theme-toggle .sun { display: none; }
-
-
-    /* Main Content */
-    main {
-      padding: 32px;
-      display: flex;
-      flex-direction: column;
-      gap: 32px;
-    }
-
-    /* Upload Zone */
-    .upload-zone {
-      position: relative;
-      border: 2px dashed var(--primary);
-      border-radius: var(--radius);
-      padding: 40px; /* Reduced padding slightly */
-      text-align: center;
-      /* cursor: pointer; REMOVED: Only button is clickable now */
-      overflow: hidden;
-      transition: background var(--transition), border-color var(--transition);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 16px; /* Spacing between elements */
-    }
-    .upload-zone::after {
-      content: "";
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: radial-gradient(circle at center, rgba(90,103,216,0.1) 0%, transparent 70%); /* More subtle, primary-based radial */
-      opacity: 0;
-      transition: opacity 0.8s ease-in-out; /* Faster fade in */
-      animation: pulse 2.5s infinite cubic-bezier(0.4, 0, 0.6, 1); /* Smoother pulse */
-      z-index: 1; /* Ensure it's above background but below content */
-      pointer-events: none; /* Allow clicks to pass through */
-    }
-    .upload-zone:hover {
-      border-color: var(--accent);
-      background: rgba(90,103,216,0.05); /* Lighter background on hover */
-    }
-    .upload-zone:hover::after {
-      opacity: 1;
-    }
-    @keyframes pulse {
-      0%, 100% { transform: scale(0.98); opacity: 0.8; }
-      50% { transform: scale(1.02); opacity: 1; }
-    }
-    .upload-zone svg {
-      width: 52px; /* Slightly larger icon */
-      height: 52px;
-      fill: var(--primary);
-      margin-bottom: 8px; /* Adjusted margin */
-      position: relative;
-      z-index: 2;
-    }
-    .upload-zone span {
-      display: block;
-      font-size: 1.15rem; /* Slightly smaller text */
-      font-weight: 500;
-      margin-bottom: 8px; /* Adjusted margin */
-      position: relative;
-      z-index: 2;
-    }
-    .file-input {
-      display: none;
-    }
-
-    /* Buttons */
-    .btn {
-      display: inline-flex; /* Use flex for centering content */
-      align-items: center;
-      justify-content: center;
-      background: var(--primary);
-      color: #fff;
-      padding: 12px 28px;
-      border: none;
-      border-radius: var(--radius);
-      cursor: pointer;
-      text-decoration: none;
-      font-weight: 600;
-      transition: transform var(--transition), box-shadow var(--transition), background-color var(--transition);
-      position: relative;
-      z-index: 2; /* Ensure button is above pulse effect */
-    }
-    .btn:hover {
-      transform: translateY(-3px); /* More pronounced lift */
-      background-color: var(--primary-dark);
-      box-shadow: 0 8px 25px rgba(0,0,0,0.15); /* Stronger shadow */
-    }
-    .btn:active {
-      transform: translateY(0);
-      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    }
-    .btn:focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: 3px;
-    }
-
-    /* Error Message */
-    .error {
-      display: none;
-      background: #fee2e2; /* Red 100 */
-      color: #b91c1c; /* Red 700 */
-      padding: 16px;
-      border-radius: var(--radius);
-      text-align: center;
-      margin-top: -16px; /* Overlap with previous section slightly */
-      position: relative;
-      z-index: 1;
-      font-weight: 500;
-      border: 1px solid #fca5a5; /* Red 300 */
-    }
-    .error[aria-live] {
-      display: block;
-    }
-
-    /* Progress Indicator */
-    .progress {
-      display: none;
-      text-align: center;
-      margin-top: 16px;
-    }
-    .loader {
-      width: 50px; /* Slightly larger loader */
-      height: 50px;
-      border: 6px solid var(--surface);
-      border-top-color: var(--primary);
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      margin: 0 auto 12px; /* Adjusted margin */
-    }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-    .progress p {
-      font-size: 1.1rem;
-      font-weight: 500;
-    }
-
-    /* Result Section */
-    .result {
-      display: none;
-      text-align: center;
-      background: rgba(230,246,255,0.6); /* Light blue with transparency */
-      backdrop-filter: blur(8px); /* Stronger blur */
-      padding: 32px; /* Increased padding */
-      border-radius: var(--radius);
-      border: 1px solid rgba(90,103,216,0.1); /* Subtle border */
-      box-shadow: 0 8px 30px rgba(0,0,0,0.05);
-      margin-top: -16px; /* Overlap with previous section */
-      position: relative;
-      z-index: 1;
-    }
-    .result h3 {
-      font-size: 1.6rem;
-      color: var(--primary);
-      margin-bottom: 24px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-    }
-    .qr-preview {
-      width: 240px; /* Slightly larger preview */
-      height: 240px;
-      margin: 0 auto 24px;
-      border-radius: var(--radius);
-      box-shadow: 0 6px 20px rgba(0,0,0,0.15); /* More prominent shadow */
-      object-fit: contain; /* Ensure image scales correctly */
-      background-color: #fff; /* White background for QR code */
-      padding: 5px; /* Small padding if QR code is tight to edge */
-    }
-    .result-links {
-      display: flex;
-      gap: 16px;
-      justify-content: center;
-      flex-wrap: wrap;
-    }
-    .result-links .btn {
-      min-width: 160px; /* Ensure buttons have minimum width */
-    }
-
-    /* Features Section */
-    .features {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); /* Adjusted min-width for better mobile fit */
-      gap: 24px;
-    }
-    .feature {
-      background: var(--surface);
-      border-radius: var(--radius);
-      padding: 20px; /* Slightly more padding */
-      text-align: center;
-      box-shadow: 0 6px 18px rgba(0,0,0,0.05);
-      transition: transform var(--transition), box-shadow var(--transition);
-      border: 1px solid rgba(0,0,0,0.05); /* Subtle border */
-    }
-    .feature:hover {
-      transform: translateY(-5px); /* More lift */
-      box-shadow: var(--shadow-hover);
-    }
-    .feature svg {
-      width: 40px; /* Larger icons */
-      height: 40px;
-      margin-bottom: 12px;
-      fill: var(--primary);
-      transition: fill var(--transition);
-    }
-    .feature:hover svg {
-      fill: var(--accent);
-    }
-    .feature h4 {
-      font-size: 1.1rem;
-      font-weight: 600;
-    }
-
-    /* Responsive Adjustments */
-    @media (max-width: 600px) {
-      body {
-        padding: 15px;
-      }
-      header {
-        flex-direction: column;
-        gap: 16px;
-        padding: 20px;
-      }
-      header h1 {
-        font-size: 1.5rem;
-      }
-      main {
-        padding: 20px;
-        gap: 24px;
-      }
-      .upload-zone {
-        padding: 30px;
-      }
-      .upload-zone span {
-        font-size: 1rem;
-      }
-      .result h3 {
-        font-size: 1.4rem;
-      }
-      .qr-preview {
-        width: 200px;
-        height: 200px;
-      }
-      .result-links .btn {
-        flex: 1 1 100%; /* Stack buttons on small screens */
-      }
-      .features {
-        grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); /* Even smaller cards for tiny screens */
-      }
-      .feature {
-        padding: 15px;
-      }
-    }
-  </style>
+  <title>QR Image Platform · Partagez une image avec un QR code</title>
+  <meta name="description" content="Déposez une image et obtenez instantanément un QR code qui l'ouvre sur n'importe quel téléphone.">
+__HEAD__
 </head>
-<body data-theme="light">
-  <div class="container">
-    <header>
-      <h1>QR Image Platform</h1>
-      <button class="theme-toggle" aria-label="Basculer thème sombre/clair" id="themeToggle">
-        <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="5"></circle>
-          <line x1="12" y1="1" x2="12" y2="3"></line>
-          <line x1="12" y1="21" x2="12" y2="23"></line>
-          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-          <line x1="1" y1="12" x2="3" y2="12"></line>
-          <line x1="21" y1="12" x2="23" y2="12"></line>
-          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-        </svg>
-        <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-        </svg>
-      </button>
-    </header>
-    <main>
-      <div class="upload-zone" id="uploadZone">
-        <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7z"/><path d="M5 18v2h14v-2H5z"/></svg>
-        <span>Cliquez ou glissez-déposez votre image (<strong>Max 10 MB</strong>)</span>
-        <button class="btn" id="selectFileBtn">Choisir un fichier</button>
+<body>
+  <a class="skip-link" href="#envoi">Aller à l'envoi d'image</a>
+  <div class="hero">
+__TOPBAR__
+    <main class="wrap hero-grid" id="main">
+      <div class="hero-copy">
+        <span class="eyebrow">Partage d'images par QR code</span>
+        <h1>Transformez une image en <em>QR code</em> partageable.</h1>
+        <p class="lead">Déposez une photo, obtenez aussitôt un QR code qui l'ouvre sur n'importe quel téléphone. Sans compte, sans application à installer.</p>
+        <ul class="facts" aria-label="Conditions d'utilisation">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="1.6"/><path d="m21 15-5-5L5 21"/></svg>PNG, JPG, GIF, BMP, WebP</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>10 Mo maximum</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Conservée 7 jours</li>
+        </ul>
       </div>
-      <input type="file" id="imageFile" class="file-input" accept="image/*" aria-label="Sélecteur d’image">
-      <div class="error" id="errorMsg" role="alert" aria-live="assertive"></div>
-      <div class="progress" id="progress">
-        <div class="loader" aria-hidden="true"></div>
-        <p>Traitement en cours...</p>
-      </div>
-      <div class="result" id="result">
-        <h3>✅ QR Code généré !</h3>
-        <img id="qrPreview" class="qr-preview" alt="QR Code généré">
-        <div class="result-links">
-          <a id="viewLink" class="btn" target="_blank">Voir l’image</a>
-          <a id="downloadQrLink" class="btn" download>Télécharger QR</a>
+
+      <section class="upload-card" id="envoi" aria-labelledby="uploadTitle">
+        <h2 class="sr-only" id="uploadTitle">Envoyer une image</h2>
+        <div id="pickerArea">
+          <input type="file" id="imageFile" class="sr-only" accept="image/png,image/jpeg,image/gif,image/bmp,image/webp" aria-describedby="dzHint">
+          <label class="dropzone" id="uploadZone" for="imageFile">
+            <span class="dz-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+            </span>
+            <span class="dz-title">Glissez-déposez votre image ici</span>
+            <span class="dz-sub">ou <u>parcourez vos fichiers</u></span>
+            <span class="dz-hint" id="dzHint">Formats PNG, JPG, GIF, BMP ou WebP · 10 Mo maximum</span>
+          </label>
+
+          <div class="preview" id="preview" hidden>
+            <img id="previewImg" alt="">
+            <div class="preview-body">
+              <div class="preview-name" id="previewName"></div>
+              <div class="preview-meta" id="previewMeta"></div>
+              <div class="progress-track" id="progressTrack" role="progressbar" aria-label="Progression de l'envoi" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                <div class="progress-bar" id="progressBar"></div>
+              </div>
+              <div class="status-text" id="statusText" aria-live="polite"></div>
+            </div>
+          </div>
+
+          <div class="error" id="errorMsg" role="alert" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>
+            <span id="errorText"></span>
+          </div>
         </div>
-      </div>
-      <div class="features">
-        <div class="feature">
-          <svg viewBox="0 0 24 24"><path d="M12 2a1 1 0 0 1 1 1v2a1 1 0 0 1-2 0V3a1 1 0 0 1 1-1zm5.657 3.343a1 1 0 0 1 1.414 1.414L18.414 7.07a1 1 0 1 1-1.414-1.414l1.657-1.657zM21 11h-2a1 1 0 0 1 0-2h2a1 1 0 1 1 0 2zm-3.343 5.657a1 1 0 0 1-1.414 1.414L15.07 16.414a1 1 0 1 1 1.414-1.414l1.171 1.171zM13 21a1 1 0 0 1-2 0v-2a1 1 0 1 1 2 0v2zm-5.657-3.343a1 1 0 0 1-1.414-1.414L5.586 15.07a1 1 0 0 1 1.414 1.414l1.343 1.343zM3 13H1a1 1 0 1 1 0-2h2a1 1 0 0 1 0 2zm3.343-5.657a1 1 0 1 1 1.414-1.414L8.414 5.586a1 1 0 1 1-1.414 1.414L6.343 7.343z"/></svg>
-          <h4>Accessible Partout</h4>
+
+        <div class="result" id="result" hidden>
+          <div class="qr-frame">
+            <img id="qrPreview" alt="QR code généré" width="170" height="170">
+          </div>
+          <div class="result-head">
+            <span class="result-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Prêt à partager</span>
+            <h2 id="resultTitle" tabindex="-1">Votre QR code est prêt</h2>
+            <p class="note">Scannez-le ou partagez le lien : l'image s'ouvre sur n'importe quel appareil.</p>
+          </div>
+          <div class="link-field">
+            <label class="sr-only" for="shareUrl">Lien de partage</label>
+            <input id="shareUrl" type="text" readonly value="">
+            <button class="btn btn-ghost btn-sm" id="copyLinkBtn" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>
+              <span class="label">Copier le lien</span>
+            </button>
+          </div>
+          <div class="actions">
+            <a id="viewLink" class="btn btn-primary" href="#" target="_blank" rel="noopener">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+              Voir l'image
+            </a>
+            <a id="downloadQrLink" class="btn btn-ghost" href="#" download>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+              Télécharger le QR
+            </a>
+          </div>
+          <div class="result-foot">
+            <button class="btn btn-text" id="resetBtn" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              Envoyer une autre image
+            </button>
+          </div>
         </div>
-        <div class="feature">
-          <svg viewBox="0 0 24 24"><path d="M17 1H7C5.9 1 5 1.9 5 3v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-2-2-2zm-2 20H9v-1h6v1zm3-3V6c0-1.1-.9-2-2-2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2z"/></svg>
-          <h4>Mobile-Friendly</h4>
-        </div>
-        <div class="feature">
-          <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.5 3.8 10.7 9 12 5.2-1.3 9-6.5 9-12V5l-9-4zM12 21.6c-4.3-1.2-7.5-5.3-7.5-10.6V6.1l7.5-3.3 7.5 3.3v4.9c0 5.3-3.2 9.4-7.5 10.6zM11 15h2v2h-2zm0-8h2v6h-2z"/></svg>
-          <h4>Sécurisé</h4>
-        </div>
-        <div class="feature">
-          <svg viewBox="0 0 24 24"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.51 0-2.91-.49-4.08-1.31L7.1 18.34c1.42.98 3.16 1.66 5.05 1.66 4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>
-          <h4>Ultra-Rapide</h4>
-        </div>
-      </div>
+      </section>
     </main>
   </div>
 
-  <script>
-    // Theme toggle
-    const body = document.body;
-    const themeToggle = document.getElementById('themeToggle');
+  <section class="section" aria-labelledby="howTitle">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="kicker">Comment ça marche</span>
+        <h2 id="howTitle">Trois étapes, quelques secondes.</h2>
+        <p>Aucune inscription : l'image est optimisée, stockée sous un identifiant aléatoire et reliée à son propre QR code.</p>
+      </div>
+      <ol class="steps">
+        <li class="step">
+          <span class="step-num" aria-hidden="true">01</span>
+          <span class="step-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg></span>
+          <h3>Déposez votre image</h3>
+          <p>Glissez une photo dans la zone d'envoi ou choisissez-la depuis votre appareil.</p>
+        </li>
+        <li class="step">
+          <span class="step-num" aria-hidden="true">02</span>
+          <span class="step-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></svg></span>
+          <h3>Le QR code est généré</h3>
+          <p>L'image est optimisée pour le web et un QR code unique pointe vers sa page de partage.</p>
+        </li>
+        <li class="step">
+          <span class="step-num" aria-hidden="true">03</span>
+          <span class="step-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/><path d="M9 7h2v2H9zM13 11h2v2h-2z"/></svg></span>
+          <h3>Partagez ou imprimez</h3>
+          <p>Téléchargez le QR, copiez le lien : il suffit de scanner pour voir l'image.</p>
+        </li>
+      </ol>
+    </div>
+  </section>
 
-    themeToggle.addEventListener('click', () => {
-      body.dataset.theme = body.dataset.theme === 'dark' ? 'light' : 'dark';
-      // Store user's preference
-      localStorage.setItem('theme', body.dataset.theme);
-    });
+  <section class="section" aria-labelledby="whyTitle">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="kicker">Avantages</span>
+        <h2 id="whyTitle">Pensé pour partager simplement.</h2>
+      </div>
+      <div class="features">
+        <article class="feature">
+          <span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/></svg></span>
+          <h3>Accessible partout</h3>
+          <p>Le lien s'ouvre dans n'importe quel navigateur, où que vous soyez.</p>
+        </article>
+        <article class="feature">
+          <span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg></span>
+          <h3>Mobile-friendly</h3>
+          <p>Des pages conçues pour l'écran du téléphone qui scanne le code.</p>
+        </article>
+        <article class="feature">
+          <span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6z"/><path d="m9 12 2 2 4-4"/></svg></span>
+          <h3>Sécurisé</h3>
+          <p>Identifiants aléatoires impossibles à deviner, fichiers nettoyés après 7 jours.</p>
+        </article>
+        <article class="feature">
+          <span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></span>
+          <h3>Ultra-rapide</h3>
+          <p>Images compressées automatiquement pour un affichage immédiat.</p>
+        </article>
+      </div>
+    </div>
+  </section>
 
-    // Apply saved theme on load
-    document.addEventListener('DOMContentLoaded', () => {
-      const savedTheme = localStorage.getItem('theme') || 'light';
-      body.dataset.theme = savedTheme;
-    });
+  <footer class="footer">
+    <div class="wrap">
+      <span>QR Image Platform</span>
+      <span>Images conservées 7 jours · 10 Mo maximum</span>
+    </div>
+  </footer>
 
-    const uploadZone = document.getElementById('uploadZone');
-    const fileInput  = document.getElementById('imageFile');
-    const selectFileBtn = document.getElementById('selectFileBtn'); // The new button
-    const errorMsg   = document.getElementById('errorMsg');
-    const progress   = document.getElementById('progress');
-    const result     = document.getElementById('result');
-
-    // Click/tap on the button opens the file selector
-    selectFileBtn.addEventListener('click', (e) => {
-      e.stopPropagation(); // Prevent uploadZone's click listener from firing
-      fileInput.click();
-    });
-
-    // Drag & drop functionality for the upload zone
-    ['dragover','dragleave','drop'].forEach(e => {
-      uploadZone.addEventListener(e, ev => {
-        ev.preventDefault(); // Prevent default browser behavior (e.g., opening file)
-        ev.stopPropagation(); // Stop propagation from affecting parent elements
-      });
-    });
-
-    uploadZone.addEventListener('dragover', () => {
-      uploadZone.classList.add('dragover');
-    });
-
-    uploadZone.addEventListener('dragleave', () => {
-      uploadZone.classList.remove('dragover');
-    });
-
-    uploadZone.addEventListener('drop', e => {
-      uploadZone.classList.remove('dragover');
-      if (e.dataTransfer.files.length) {
-        handleFile(e.dataTransfer.files[0]);
-      }
-    });
-
-    // Handle file selection via input change
-    fileInput.addEventListener('change', e => {
-      if (e.target.files.length) {
-        handleFile(e.target.files[0]);
-      }
-    });
-
-    function showError(msg) {
-      errorMsg.textContent = msg;
-      errorMsg.style.display = 'block';
-      errorMsg.setAttribute('aria-live', 'assertive'); // Make screen readers announce it
-      progress.style.display = result.style.display = 'none';
-      result.setAttribute('aria-hidden', 'true');
-      progress.setAttribute('aria-hidden', 'true');
-    }
-
-    function hideError() {
-      errorMsg.style.display = 'none';
-      errorMsg.removeAttribute('aria-live');
-    }
-
-    async function handleFile(file) {
-      hideError();
-      if (!file.type.startsWith('image/')) {
-        return showError('Fichier non supporté. Veuillez sélectionner une image.');
-      }
-      if (file.size > 10 * 1024 * 1024) { // 10MB
-        return showError('Le fichier est trop volumineux. La taille maximale est de 10 MB.');
-      }
-
-      progress.style.display = 'block';
-      progress.setAttribute('aria-hidden', 'false');
-      result.style.display = 'none';
-      result.setAttribute('aria-hidden', 'true');
-
-
-      const form = new FormData();
-      form.append('image', file);
-
-      try {
-        const response = await fetch('/upload', {
-          method: 'POST',
-          body: form,
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || `Erreur serveur: ${response.status}`);
-        }
-
-        const data = await response.json();
-
-        progress.style.display = 'none';
-        progress.setAttribute('aria-hidden', 'true');
-
-        if (data.success) {
-          document.getElementById('qrPreview').src = data.qr_url;
-          document.getElementById('qrPreview').alt = `QR Code pour ${file.name}`;
-          document.getElementById('viewLink').href = data.view_url;
-          document.getElementById('downloadQrLink').href = data.download_qr_url;
-          result.style.display = 'block';
-          result.setAttribute('aria-hidden', 'false');
-        } else {
-          showError(data.error || 'Une erreur inconnue est survenue.');
-        }
-      } catch (error) {
-        console.error('Upload error:', error);
-        showError(`Erreur lors du téléchargement : ${error.message || 'Problème réseau ou serveur indisponible.'}`);
-      }
-    }
-  </script>
+__TOAST__
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>
 '''
+    index_html = (index_html.replace('__HEAD__', head_common)
+                            .replace('__TOPBAR__', topbar)
+                            .replace('__TOAST__', toast))
 
     with open('templates/index.html', 'w', encoding='utf-8') as f:
         f.write(index_html)
 
     # Template de visualisation
-    view_html = '''<!DOCTYPE html>
-<html lang="fr" data-theme="light">
+    view_html = r'''<!DOCTYPE html>
+<html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Image partagée</title>
-  <style>
-    /* Base CSS from index.html for consistent themes */
-    :root {
-      --bg: #f0f2f5;
-      --surface: #fff;
-      --text: #333;
-      --primary: #5a67d8;
-      --primary-dark: #4c52af;
-      --accent: #ed64a6;
-      --radius: 12px;
-      --transition: 0.3s ease;
-      --shadow-light: 0 12px 40px rgba(0,0,0,0.08);
-      --shadow-hover: 0 16px 48px rgba(0,0,0,0.12);
-    }
-    [data-theme="dark"] {
-      --bg: #1a202c;
-      --surface: #2d3748;
-      --text: #e2e8f0;
-      --primary: #667eea;
-      --primary-dark: #556be7;
-      --accent: #f687b3;
-      --shadow-light: 0 12px 40px rgba(0,0,0,0.2);
-      --shadow-hover: 0 16px 48px rgba(0,0,0,0.3);
-    }
-
-    /* General Reset */
-    *, *::before, *::after {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh; /* Use min-height for full viewport height */
-      padding: 20px; /* Add padding for smaller screens */
-      transition: background var(--transition), color var(--transition);
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-    }
-
-    /* Card Styling */
-    .card {
-      background: var(--surface);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow-light);
-      overflow: hidden;
-      max-width: 600px;
-      width: 100%;
-      transition: background var(--transition), box-shadow var(--transition);
-      display: flex;
-      flex-direction: column;
-      align-items: center; /* Center content horizontally */
-    }
-    .card header {
-      background: var(--primary);
-      color: #fff;
-      padding: 24px;
-      text-align: center;
-      width: 100%; /* Ensure header spans full width */
-    }
-    .card header h2 {
-      font-size: 1.8rem;
-      font-weight: 700;
-    }
-    .card .content {
-      padding: 32px; /* Increased padding */
-      text-align: center;
-      display: flex;
-      flex-direction: column;
-      gap: 24px; /* More space between elements */
-      width: 100%;
-    }
-    .card img {
-      max-width: 100%;
-      height: auto; /* Maintain aspect ratio */
-      border-radius: var(--radius);
-      box-shadow: 0 8px 25px rgba(0,0,0,0.1); /* Stronger shadow */
-      margin: 0 auto; /* Center image */
-      display: block; /* Remove extra space below image */
-    }
-    .info {
-      font-size: 1rem;
-      color: var(--text);
-      line-height: 1.6;
-    }
-    .info p strong {
-      color: var(--primary);
-    }
-
-    /* Button Styling (reused from index.html for consistency) */
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      background: var(--primary);
-      color: #fff;
-      padding: 12px 28px;
-      border: none;
-      border-radius: var(--radius);
-      cursor: pointer;
-      text-decoration: none;
-      font-weight: 600;
-      transition: transform var(--transition), box-shadow var(--transition), background-color var(--transition);
-    }
-    .btn:hover {
-      transform: translateY(-3px);
-      background-color: var(--primary-dark);
-      box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-    }
-    .btn:active {
-      transform: translateY(0);
-      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    }
-    .btn:focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: 3px;
-    }
-
-    /* Footer */
-    .footer {
-      background: rgba(0,0,0,0.03); /* Lighter background */
-      text-align: center;
-      padding: 18px; /* More padding */
-      font-size: .9rem;
-      color: var(--text);
-      width: 100%;
-      border-top: 1px solid rgba(0,0,0,0.05); /* Subtle border */
-    }
-    .footer a {
-      color: var(--primary);
-      text-decoration: none;
-      font-weight: 600;
-      transition: color var(--transition);
-    }
-    .footer a:hover {
-      color: var(--accent);
-      text-decoration: underline;
-    }
-
-    /* Responsive Adjustments */
-    @media (max-width: 600px) {
-      body {
-        padding: 15px;
-      }
-      .card header {
-        padding: 20px;
-      }
-      .card header h2 {
-        font-size: 1.5rem;
-      }
-      .card .content {
-        padding: 20px;
-        gap: 18px;
-      }
-      .info {
-        font-size: 0.9rem;
-      }
-      .btn {
-        padding: 10px 20px;
-        font-size: 0.95rem;
-      }
-      .footer {
-        padding: 14px;
-        font-size: 0.8rem;
-      }
-    }
-  </style>
+  <title>{{ image_info.original_name }} · QR Image Platform</title>
+  <meta name="description" content="Image partagée via QR Image Platform.">
+__HEAD__
 </head>
 <body>
-  <div class="card">
-    <header><h2>Image Partagée</h2></header>
-    <div class="content">
-      <img src="{{ url_for('serve_image', image_id=image_id) }}" alt="Image partagée: {{ image_info.original_name }}">
-      <div class="info">
-        <p><strong>Nom :</strong> {{ image_info.original_name }}</p>
-        <p><strong>Upload :</strong> {{ image_info.upload_time[:10] }}</p>
-      </div>
-      <a href="{{ url_for('serve_image', image_id=image_id) }}" class="btn" download="{{ image_info.original_name }}">⬇️ Télécharger</a>
-    </div>
-    <div class="footer">
-      Créé avec <a href="{{ url_for('index') }}">QR Image Platform</a>
-    </div>
+  <a class="skip-link" href="#main">Aller au contenu</a>
+  <div class="view-top">
+__TOPBAR__
   </div>
+
+  <main class="view-main" id="main">
+    <div class="wrap">
+      {% set t = image_info.upload_time or '' %}
+      <article class="share-card" aria-labelledby="imgTitle">
+        <figure class="stage" style="margin:0">
+          <img id="sharedImg" src="{{ url_for('serve_image', image_id=image_id) }}" alt="Image partagée : {{ image_info.original_name }}">
+        </figure>
+        <div class="share-side">
+          <div>
+            <span class="kicker">Image partagée</span>
+            <h1 id="imgTitle">{{ image_info.original_name }}</h1>
+            <p class="sub">Partagée via QR Image Platform{% if t|length >= 10 %} le {{ t[8:10] }}/{{ t[5:7] }}/{{ t[0:4] }}{% endif %}.</p>
+          </div>
+
+          <dl class="meta">
+            <div>
+              <dt>Ajoutée le</dt>
+              <dd>{% if t|length >= 16 %}{{ t[8:10] }}/{{ t[5:7] }}/{{ t[0:4] }} · {{ t[11:16] }}{% else %}{{ t[:10] }}{% endif %}</dd>
+            </div>
+            <div>
+              <dt>Poids</dt>
+              <dd>{% if image_info.file_size %}{{ '%.0f'|format(image_info.file_size / 1024) }} Ko{% else %}n/d{% endif %}</dd>
+            </div>
+            <div>
+              <dt>Dimensions</dt>
+              <dd id="dims">…</dd>
+            </div>
+            <div>
+              <dt>Format</dt>
+              <dd>JPEG optimisé</dd>
+            </div>
+          </dl>
+
+          <div class="qr-block">
+            <a class="qr-mini" href="{{ url_for('serve_qr', image_id=image_id) }}" target="_blank" rel="noopener" aria-label="Ouvrir le QR code en grand">
+              <img src="{{ url_for('serve_qr', image_id=image_id) }}" alt="QR code de cette page">
+            </a>
+            <div>
+              <strong>Scannez pour ouvrir sur mobile</strong>
+              <p>Ce QR code renvoie vers cette page. Lien valable 7 jours après l'envoi.</p>
+            </div>
+          </div>
+
+          <div class="share-actions">
+            <a href="{{ url_for('serve_image', image_id=image_id) }}" class="btn btn-primary" download="{{ image_info.original_name }}">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+              Télécharger l'image
+            </a>
+            <div class="row">
+              <a href="{{ url_for('download_qr', image_id=image_id) }}" class="btn btn-ghost" aria-label="Télécharger le QR code">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M14 14h3v3h-3zM17 20h4v-3"/></svg>
+                QR code
+              </a>
+              <button type="button" class="btn btn-ghost" data-copy-current>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>
+                <span class="label">Copier le lien</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <aside class="cta-band">
+        <div>
+          <strong>Vous aussi, partagez une image en un scan.</strong>
+          <p>Gratuit, sans compte, prêt en quelques secondes.</p>
+        </div>
+        <a class="btn btn-primary" href="{{ url_for('index') }}">Créer mon QR code</a>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap">
+      <span>Créé avec <a href="{{ url_for('index') }}">QR Image Platform</a></span>
+      <span>Images conservées 7 jours</span>
+    </div>
+  </footer>
+
+__TOAST__
+  <script>
+    (function () {
+      var img = document.getElementById('sharedImg');
+      var dims = document.getElementById('dims');
+      function show() { if (img.naturalWidth) dims.textContent = img.naturalWidth + ' × ' + img.naturalHeight + ' px'; }
+      if (img.complete) show(); else img.addEventListener('load', show);
+      img.addEventListener('error', function () { dims.textContent = 'n/d'; });
+    })();
+  </script>
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>
-
 '''
+    view_html = (view_html.replace('__HEAD__', head_common)
+                          .replace('__TOPBAR__', topbar)
+                          .replace('__TOAST__', toast))
 
     with open('templates/view_image.html', 'w', encoding='utf-8') as f:
         f.write(view_html)
